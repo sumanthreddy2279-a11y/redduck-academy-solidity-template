@@ -30,6 +30,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     Entry[] public entries;
 
     uint256 public totalWeight;
+    uint256 public totalDeposited;
     uint256 public requestId;
     uint256 public randomWord;
 
@@ -123,6 +124,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
         if (!success) {
             revert TransferFailed();
         }
+        totalDeposited += amount;
 
         totalWeight += weight;
 
