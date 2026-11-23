@@ -274,4 +274,41 @@ describe("Pair (liquidity and edge cases)", function () {
       "Swapped event was not emitted",
     );
   });
+
+  it("supports reverse swaps from Token B to Token A", async function () {
+    const { pair, tokenB, alice } = await deployFixture();
+
+    await pair.write.addLiquidity([parseEther("1000"), parseEther("1000")]);
+
+    const reserve0Before = await pair.read.reserve0();
+    const reserve1Before = await pair.read.reserve1();
+    const kBefore = reserve0Before * reserve1Before;
+
+    const amountIn = parseEther("100");
+
+    // Token B is token1, so use reserve1 as input and reserve0 as output.
+    const expectedOut = await pair.read.getAmountOut([
+      amountIn,
+      reserve1Before,
+      reserve0Before,
+    ]);
+
+    await pair.write.swap([tokenB.address, amountIn, 0n], {
+      account: alice.account,
+    });
+
+    const reserve0After = await pair.read.reserve0();
+    const reserve1After = await pair.read.reserve1();
+
+    assert.equal(reserve0After, reserve0Before - expectedOut);
+    assert.equal(reserve1After, reserve1Before + amountIn);
+
+    assert.ok(expectedOut > parseEther("90") && expectedOut < parseEther("91"));
+
+    assert.ok(
+      reserve0After * reserve1After >= kBefore,
+      "k must not decrease across a reverse swap",
+    );
+  });
+
 });
