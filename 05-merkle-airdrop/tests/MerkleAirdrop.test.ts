@@ -60,13 +60,131 @@ describe("MerkleAirdrop", function () {
     const daveAddr = getAddress(dave.account.address);
     const amount = parseEther("50");
 
-    const { v, r, s } = await signAirdropClaim(signer, daveAddr, amount);
+    const chainId = (await network.connect()).networkConfig.chainId;
 
+    const { v, r, s } = await signAirdropClaim(signer, daveAddr, amount, airdrop.address, chainId);
     await airdrop.write.claimWithSignature([amount, v, r, s], { account: dave.account });
 
     assert.equal((await token.read.balanceOf([daveAddr])) as bigint, amount);
     assert.equal((await airdrop.read.hasClaimed([daveAddr])) as boolean, true);
   });
 
-  // TODO: add the failure-mode tests from TASK.md.
+  it("rejects a claim with an invalid Merkle proof", async function () {
+    const { airdrop, alice } = await deployFixture();
+
+    await assert.rejects(
+      airdrop.write.claim([parseEther("999"), []], {
+        account: alice.account,
+      }),
+    );
+  });
+
+  it("prevents an account from claiming twice", async function () {
+    const { airdrop, tree, entries, alice } = await deployFixture();
+
+    const proof = tree.getProof(0);
+
+    await airdrop.write.claim([entries[0].amount, proof], {
+      account: alice.account,
+    });
+
+    await assert.rejects(
+      airdrop.write.claim([entries[0].amount, proof], {
+        account: alice.account,
+      }),
+    );
+  });
+  it("rejects a signature from an unauthorized signer", async function () {
+    const { airdrop, dave, alice } = await deployFixture();
+    const amount = parseEther("75");
+    const chainId = (await network.connect()).networkConfig.chainId;
+
+    const { v, r, s } = await signAirdropClaim(
+      alice,
+      dave.account.address,
+      amount,
+      airdrop.address,
+      chainId,
+    );
+
+    await assert.rejects(
+      airdrop.write.claimWithSignature([amount, v, r, s], {
+        account: dave.account,
+      }),
+    );
+  });
+
+  it("rejects a signature intended for a different recipient", async function () {
+    const { airdrop, signer, dave, eve } = await deployFixture();
+    const amount = parseEther("75");
+    const chainId = (await network.connect()).networkConfig.chainId;
+
+    const { v, r, s } = await signAirdropClaim(
+      signer,
+      dave.account.address,
+      amount,
+      airdrop.address,
+      chainId,
+    );
+
+    await assert.rejects(
+      airdrop.write.claimWithSignature([amount, v, r, s], {
+        account: eve.account,
+      }),
+    );
+  });
+
+  it("rejects a signature created for a different contract deployment", async function () {
+    const { airdrop, token, signer, dave } = await deployFixture();
+    const amount = parseEther("75");
+    const chainId = (await network.connect()).networkConfig.chainId;
+
+    const { v, r, s } = await signAirdropClaim(
+      signer,
+      dave.account.address,
+      amount,
+      airdrop.address,
+      chainId,
+    );
+
+    const merkleRoot = await airdrop.read.merkleRoot();
+
+    const secondAirdrop = await viem.deployContract("MerkleAirdrop", [
+      token.address,
+      merkleRoot,
+      signer.account.address,
+    ]);
+
+    await assert.rejects(
+      secondAirdrop.write.claimWithSignature([amount, v, r, s], {
+        account: dave.account,
+      }),
+    );
+  });
+  it("prevents claiming through Merkle proof after a signature claim", async function () {
+    const { airdrop, tree, entries, signer, alice } = await deployFixture();
+
+    const amount = entries[0].amount;
+    const chainId = (await network.connect()).networkConfig.chainId;
+
+    const { v, r, s } = await signAirdropClaim(
+      signer,
+      alice.account.address,
+      amount,
+      airdrop.address,
+      chainId,
+    );
+
+    // Claim using the admin signature.
+    await airdrop.write.claimWithSignature([amount, v, r, s], {
+      account: alice.account,
+    });
+
+    // Attempt to claim again using the Merkle proof.
+    await assert.rejects(
+      airdrop.write.claim([amount, tree.getProof(0)], {
+        account: alice.account,
+      }),
+    );
+  });
 });

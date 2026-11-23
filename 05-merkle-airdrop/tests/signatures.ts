@@ -1,9 +1,11 @@
-// Signing helper for claimWithSignature. Implement this so the signature it
-// produces is accepted by your contract when signed by the `signer` passed to
-// the constructor. You choose the signing scheme — it must match what the
-// contract recovers and must bind the signature to the specific claimant.
-
-import { type WalletClient, type Address } from "viem";
+import {
+  encodeAbiParameters,
+  keccak256,
+  hashMessage,
+  type WalletClient,
+  type Address,
+  type Hex,
+} from "viem";
 
 export interface ClaimSignatureParts {
   v: number;
@@ -15,8 +17,24 @@ export async function signAirdropClaim(
   signerWallet: WalletClient,
   claimant: Address,
   amount: bigint,
+  contractAddress: Address,
+  chainId: number,
 ): Promise<ClaimSignatureParts> {
-  // TODO: build the message your contract recovers over, sign it with
-  //       signerWallet, and split the signature into { v, r, s }.
-  throw new Error("signAirdropClaim not implemented");
+  const messageHash = keccak256(
+    encodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "address" }, { type: "uint256" }],
+      [contractAddress, BigInt(chainId), claimant, amount],
+    ),
+  );
+
+  const signature = await signerWallet.signMessage({
+    message: { raw: messageHash as Hex },
+  });
+
+  const r = `0x${signature.slice(2, 66)}` as Hex;
+  const s = `0x${signature.slice(66, 130)}` as Hex;
+  const recovery = parseInt(signature.slice(130, 132), 16);
+  const v = recovery < 27 ? recovery + 27 : recovery;
+
+  return { v, r, s };
 }

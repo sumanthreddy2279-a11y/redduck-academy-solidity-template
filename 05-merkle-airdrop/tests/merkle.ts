@@ -1,37 +1,78 @@
-// Merkle tree utilities for the airdrop. Implement these so the roots and proofs
-// you produce verify against your contract's claim() / _verify(). You choose the
-// leaf hash format, the node-combination rule, and the odd-layer convention —
-// whatever you pick must match what the contract recomputes.
-
-import { keccak256, encodePacked, concat, type Address, type Hex } from "viem";
+import { keccak256, encodePacked, type Address, type Hex } from "viem";
 
 export interface AirdropEntry {
   account: Address;
   amount: bigint;
 }
 
-// Hash one airdrop entry into a leaf.
+// Hash an account and its allocation into a Merkle leaf.
 export function hashLeaf(entry: AirdropEntry): Hex {
-  // TODO
-  throw new Error("hashLeaf not implemented");
+  return keccak256(encodePacked(["address", "uint256"], [entry.account, entry.amount]));
+}
+
+// Hash two nodes in sorted order.
+function hashPair(a: Hex, b: Hex): Hex {
+  const [left, right] = BigInt(a) <= BigInt(b) ? [a, b] : [b, a];
+
+  return keccak256(encodePacked(["bytes32", "bytes32"], [left, right]));
 }
 
 export class MerkleTree {
   layers: Hex[][];
 
   constructor(entries: AirdropEntry[]) {
-    // TODO: build the tree layers from the leaves up to a single root.
-    this.layers = [];
+    if (entries.length === 0) {
+      throw new Error("Merkle tree requires at least one entry");
+    }
+
+    const leaves = entries.map(hashLeaf);
+
+    this.layers = [leaves];
+
+    while (this.layers[this.layers.length - 1].length > 1) {
+      const currentLayer = this.layers[this.layers.length - 1];
+      const nextLayer: Hex[] = [];
+
+      for (let i = 0; i < currentLayer.length; i += 2) {
+        const left = currentLayer[i];
+        const right = currentLayer[i + 1];
+
+        // Promote an unpaired node unchanged to the next layer.
+        if (right === undefined) {
+          nextLayer.push(left);
+        } else {
+          nextLayer.push(hashPair(left, right));
+        }
+      }
+
+      this.layers.push(nextLayer);
+    }
   }
 
   get root(): Hex {
-    // TODO
-    throw new Error("root not implemented");
+    return this.layers[this.layers.length - 1][0];
   }
 
-  // The sibling hashes from the leaf at `index` up to the root.
+  // Return sibling hashes from the leaf to the root.
   getProof(index: number): Hex[] {
-    // TODO
-    throw new Error("getProof not implemented");
+    if (!Number.isInteger(index) || index < 0 || index >= this.layers[0].length) {
+      throw new Error("Invalid leaf index");
+    }
+
+    const proof: Hex[] = [];
+    let currentIndex = index;
+
+    for (let layerIndex = 0; layerIndex < this.layers.length - 1; layerIndex++) {
+      const layer = this.layers[layerIndex];
+      const siblingIndex = currentIndex ^ 1;
+
+      if (siblingIndex < layer.length) {
+        proof.push(layer[siblingIndex]);
+      }
+
+      currentIndex = Math.floor(currentIndex / 2);
+    }
+
+    return proof;
   }
 }
