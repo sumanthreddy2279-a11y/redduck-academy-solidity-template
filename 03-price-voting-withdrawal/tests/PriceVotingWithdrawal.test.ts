@@ -27,14 +27,14 @@ describe("PriceVotingWithdrawal", function () {
     ]);
 
     for (const w of [alice, bob, carol]) {
-      await token.write.transfer([
-        w.account.address,
-        parseEther("1000"),
-      ]);
+      await token.write.transfer(
+        [w.account.address, parseEther("1000")],
+        { account: deployer.account }
+      );
 
       await token.write.approve(
         [voting.address, parseEther("1000")],
-        { account: w.account },
+        { account: w.account }
       );
     }
 
@@ -47,11 +47,12 @@ describe("PriceVotingWithdrawal", function () {
 
     assert.equal(
       (await voting.read.token()).toLowerCase(),
-      token.address.toLowerCase(),
+      token.address.toLowerCase()
     );
 
     assert.equal(await voting.read.votingEnd(), votingEnd);
     assert.equal(await voting.read.finalized(), false);
+    assert.equal(await voting.read.MAX_PRICES(), 100n);
   });
 
   it("allows a voter to vote", async function () {
@@ -60,17 +61,17 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(
       await voting.read.weightOf([100n]),
-      parseEther("100"),
+      parseEther("100")
     );
 
     assert.equal(
       await voting.read.lockedOf([alice.account.address, 100n]),
-      parseEther("100"),
+      parseEther("100")
     );
   });
 
@@ -80,17 +81,17 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [100n, parseEther("50")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(
       await voting.read.weightOf([100n]),
-      parseEther("150"),
+      parseEther("150")
     );
   });
 
@@ -100,22 +101,22 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("50")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(
       await voting.read.weightOf([100n]),
-      parseEther("100"),
+      parseEther("100")
     );
 
     assert.equal(
       await voting.read.weightOf([200n]),
-      parseEther("50"),
+      parseEther("50")
     );
   });
 
@@ -125,22 +126,22 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.withdraw(
       [100n, parseEther("40")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(
       await voting.read.weightOf([100n]),
-      parseEther("60"),
+      parseEther("60")
     );
 
     assert.equal(
       await voting.read.lockedOf([alice.account.address, 100n]),
-      parseEther("60"),
+      parseEther("60")
     );
   });
 
@@ -152,12 +153,12 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.withdraw(
       [100n, parseEther("40")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     const after = await token.read.balanceOf([alice.account.address]);
@@ -171,19 +172,19 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.withdraw(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(await voting.read.weightOf([100n]), 0n);
 
     assert.equal(
       await voting.read.lockedOf([alice.account.address, 100n]),
-      0n,
+      0n
     );
   });
 
@@ -193,14 +194,14 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("50")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await assert.rejects(
       voting.write.withdraw(
         [100n, parseEther("60")],
-        { account: alice.account },
-      ),
+        { account: alice.account }
+      )
     );
   });
 
@@ -210,23 +211,24 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.withdraw(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(await voting.read.weightOf([100n]), 0n);
+
     assert.equal(
       await voting.read.weightOf([200n]),
-      parseEther("100"),
+      parseEther("100")
     );
   });
 
@@ -235,7 +237,7 @@ describe("PriceVotingWithdrawal", function () {
       await networkHelpers.loadFixture(deployFixture);
 
     await assert.rejects(
-      voting.write.vote([100n, 0n], { account: alice.account }),
+      voting.write.vote([100n, 0n], { account: alice.account })
     );
   });
 
@@ -244,7 +246,7 @@ describe("PriceVotingWithdrawal", function () {
       await networkHelpers.loadFixture(deployFixture);
 
     await assert.rejects(
-      voting.write.withdraw([100n, 0n], { account: alice.account }),
+      voting.write.withdraw([100n, 0n], { account: alice.account })
     );
   });
 
@@ -257,8 +259,8 @@ describe("PriceVotingWithdrawal", function () {
     await assert.rejects(
       voting.write.vote(
         [100n, parseEther("100")],
-        { account: alice.account },
-      ),
+        { account: alice.account }
+      )
     );
   });
 
@@ -268,19 +270,19 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await networkHelpers.time.increaseTo(votingEnd);
 
     await voting.write.withdraw(
       [100n, parseEther("40")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     assert.equal(
       await voting.read.weightOf([100n]),
-      parseEther("60"),
+      parseEther("60")
     );
   });
 
@@ -297,21 +299,21 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("150")],
-      { account: bob.account },
+      { account: bob.account }
     );
 
     await voting.write.withdraw(
       [200n, parseEther("100")],
-      { account: bob.account },
+      { account: bob.account }
     );
 
     await networkHelpers.time.increaseTo(
-      await voting.read.votingEnd(),
+      await voting.read.votingEnd()
     );
 
     await voting.write.finalize();
@@ -328,21 +330,21 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("200")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("100")],
-      { account: bob.account },
+      { account: bob.account }
     );
 
     await voting.write.withdraw(
       [100n, parseEther("200")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await networkHelpers.time.increaseTo(
-      await voting.read.votingEnd(),
+      await voting.read.votingEnd()
     );
 
     await voting.write.finalize();
@@ -359,16 +361,16 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("100")],
-      { account: bob.account },
+      { account: bob.account }
     );
 
     await networkHelpers.time.increaseTo(
-      await voting.read.votingEnd(),
+      await voting.read.votingEnd()
     );
 
     await voting.write.finalize();
@@ -408,12 +410,12 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.vote(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     await voting.write.vote(
       [200n, parseEther("50")],
-      { account: bob.account },
+      { account: bob.account }
     );
 
     await networkHelpers.time.increaseTo(votingEnd);
@@ -423,11 +425,94 @@ describe("PriceVotingWithdrawal", function () {
 
     await voting.write.withdraw(
       [100n, parseEther("100")],
-      { account: alice.account },
+      { account: alice.account }
     );
 
     const after = await voting.read.winner();
 
     assert.deepEqual(after, before);
+  });
+
+  // Scalability tests
+
+  it("allows voting on 100 distinct prices", async function () {
+    const { voting, alice } =
+      await networkHelpers.loadFixture(deployFixture);
+
+    for (let price = 1; price <= 100; price++) {
+      await voting.write.vote(
+        [BigInt(price), parseEther("1")],
+        { account: alice.account }
+      );
+    }
+
+    assert.equal(
+      await voting.read.weightOf([100n]),
+      parseEther("1")
+    );
+  });
+
+  it("rejects a 101st distinct price", async function () {
+    const { voting, alice } =
+      await networkHelpers.loadFixture(deployFixture);
+
+    for (let price = 1; price <= 100; price++) {
+      await voting.write.vote(
+        [BigInt(price), parseEther("1")],
+        { account: alice.account }
+      );
+    }
+
+    await assert.rejects(
+      voting.write.vote(
+        [101n, parseEther("1")],
+        { account: alice.account }
+      )
+    );
+  });
+
+  it("allows additional votes for existing prices after reaching the limit", async function () {
+    const { voting, alice } =
+      await networkHelpers.loadFixture(deployFixture);
+
+    for (let price = 1; price <= 100; price++) {
+      await voting.write.vote(
+        [BigInt(price), parseEther("1")],
+        { account: alice.account }
+      );
+    }
+
+    await voting.write.vote(
+      [1n, parseEther("5")],
+      { account: alice.account }
+    );
+
+    assert.equal(
+      await voting.read.weightOf([1n]),
+      parseEther("6")
+    );
+  });
+
+  it("selects the correct winner among 100 distinct prices", async function () {
+    const { voting, alice, votingEnd } =
+      await networkHelpers.loadFixture(deployFixture);
+
+    for (let price = 1; price <= 100; price++) {
+      await voting.write.vote(
+        [
+          BigInt(price),
+          parseEther(price === 50 ? "10" : "1"),
+        ],
+        { account: alice.account }
+      );
+    }
+
+    await networkHelpers.time.increaseTo(votingEnd);
+    await voting.write.finalize();
+
+    const result = await voting.read.winner();
+
+    assert.equal(result[0], 50n);
+    assert.equal(result[1], parseEther("10"));
   });
 });

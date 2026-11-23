@@ -4,31 +4,12 @@ pragma solidity 0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/*
- * Design:
- * 1. Vote during the voting period.
- * 2. Withdraw tokens at any time using withdraw(price, amount).
- * 3. After voting ends, anyone calls finalize().
- * 4. Read the fixed result using winner().
- *
- * Withdrawals made before finalization reduce the corresponding price's
- * voting weight. Withdrawals after finalization are still allowed, but
- * cannot change the already finalized result.
- *
- * Reflection:
- * We recalculate the winner during finalization using the current net
- * weights of all prices. Every withdrawal reduces the relevant price's
- * weight. The simpler previous approach of only adding votes and tracking
- * the leader would be incorrect because it would leave withdrawn votes
- * counted and could produce the wrong winner.
- *
- * Ties are resolved in favor of the price that was voted for first.
- * If there are no votes, the winning price and weight are both zero.
- */
-
 contract PriceVotingWithdrawal {
     IERC20 public immutable token;
     uint256 public immutable votingEnd;
+
+    // Limits finalization to a fixed maximum number of prices.
+    uint256 public constant MAX_PRICES = 100;
 
     mapping(uint256 => uint256) private _weights;
     mapping(address => mapping(uint256 => uint256)) private _locked;
@@ -46,19 +27,10 @@ contract PriceVotingWithdrawal {
     error ZeroAmount();
     error InsufficientLocked();
     error TransferFailed();
+    error MaxPricesReached();
 
-    event Voted(
-        address indexed voter,
-        uint256 indexed price,
-        uint256 amount
-    );
-
-    event Withdrawn(
-        address indexed voter,
-        uint256 indexed price,
-        uint256 amount
-    );
-
+    event Voted(address indexed voter, uint256 indexed price, uint256 amount);
+    event Withdrawn(address indexed voter, uint256 indexed price, uint256 amount);
     event Finalized(uint256 winningPrice, uint256 winningWeight);
 
     constructor(IERC20 token_, uint256 votingEnd_) {
@@ -70,6 +42,11 @@ contract PriceVotingWithdrawal {
         if (block.timestamp >= votingEnd) revert VotingEnded();
         if (finalized) revert AlreadyFinalized();
         if (amount == 0) revert ZeroAmount();
+
+        // Reject new prices once the fixed limit is reached.
+        if (!_priceExists[price] && _prices.length >= MAX_PRICES) {
+            revert MaxPricesReached();
+        }
 
         bool success = token.transferFrom(
             msg.sender,
@@ -96,7 +73,7 @@ contract PriceVotingWithdrawal {
 
         if (amount > lockedAmount) revert InsufficientLocked();
 
-        // Update accounting before transferring tokens.
+        // Checks-effects-interactions.
         _locked[msg.sender][price] = lockedAmount - amount;
         _weights[price] -= amount;
 
@@ -113,7 +90,8 @@ contract PriceVotingWithdrawal {
         uint256 highestWeight = 0;
         uint256 selectedPrice = 0;
 
-        // Strictly greater means the first price wins in a tie.
+        // The number of iterations is bounded by MAX_PRICES.
+        // Strictly greater preserves first-voted-price tie-breaking.
         for (uint256 i = 0; i < _prices.length; i++) {
             uint256 price = _prices[i];
             uint256 weight = _weights[price];
@@ -148,7 +126,10 @@ contract PriceVotingWithdrawal {
     function lockedOf(
         address voter,
         uint256 price
-    ) external view returns (uint256) {
+    ) external
+        view
+        returns (uint256)
+    {
         return _locked[voter][price];
     }
 }
