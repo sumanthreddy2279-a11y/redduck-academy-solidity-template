@@ -2,7 +2,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { network } from "hardhat";
-import { getAddress, parseEther } from "viem";
+import { parseEther, decodeEventLog, getAddress } from "viem";
 
 const { viem, networkHelpers } = await network.connect();
 
@@ -331,7 +331,31 @@ describe("PriceVoting", function () {
         alice.account.address,
       ]);
 
-      await voting.write.claim({ account: alice.account });
+      const hash = await voting.write.claim({
+  account: alice.account,
+});
+
+const client = await viem.getPublicClient();
+const receipt = await client.getTransactionReceipt({ hash });
+
+const claimedEvent = receipt.logs.some((log) => {
+  try {
+    const decoded = decodeEventLog({
+      abi: voting.abi,
+      data: log.data,
+      topics: log.topics,
+    });
+
+    return (
+      log.address.toLowerCase() === voting.address.toLowerCase() &&
+      decoded.eventName === "Claimed"
+    );
+  } catch {
+    return false;
+  }
+});
+
+assert.equal(claimedEvent, true, "Claimed event should be emitted");
 
       const balanceAfter = await token.read.balanceOf([
         alice.account.address,
